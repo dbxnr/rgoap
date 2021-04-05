@@ -60,13 +60,13 @@
 #[macro_use]
 #[cfg(feature = "use_serde")]
 extern crate serde_derive;
+extern crate pathfinding;
 #[cfg(feature = "use_serde")]
 extern crate serde;
-extern crate pathfinding;
 
+use pathfinding::prelude::astar;
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
-use pathfinding::prelude::astar;
 
 /// A map of state atoms to their values.
 pub type State<K> = BTreeMap<K, bool>;
@@ -82,7 +82,10 @@ pub struct Action<K> {
 }
 
 impl<K> Action<K> {
-    pub fn new(name: String, cost: usize) -> Action<K> where K: Clone + Ord {
+    pub fn new(name: String, cost: usize) -> Action<K>
+    where
+        K: Clone + Ord,
+    {
         Action {
             name: name,
             cost: cost,
@@ -94,14 +97,15 @@ impl<K> Action<K> {
 
 /// A node in the planner graph.
 #[derive(PartialEq, Eq, Clone)]
-struct PlanNode <'a, K> {
+struct PlanNode<'a, K> {
     current_state: State<K>,
     action: Option<&'a Action<K>>,
 }
 
 impl<'a, K: Hash> Hash for PlanNode<'a, K> {
     fn hash<H>(&self, state: &mut H)
-        where H: Hasher
+    where
+        H: Hasher,
     {
         if let Some(action) = self.action {
             action.name.hash(state);
@@ -116,7 +120,10 @@ impl<'a, K: Hash> Hash for PlanNode<'a, K> {
 
 impl<'a, K> PlanNode<'a, K> {
     /// Makes an initial plan node without a parent.
-    fn initial(initial_state: &'a State<K>) -> PlanNode<'a, K> where K: Clone {
+    fn initial(initial_state: &'a State<K>) -> PlanNode<'a, K>
+    where
+        K: Clone,
+    {
         PlanNode {
             current_state: initial_state.clone(),
             action: None,
@@ -124,7 +131,10 @@ impl<'a, K> PlanNode<'a, K> {
     }
 
     /// Makes a plan node from a parent state and an action applied to that state.
-    fn child(parent_state: State<K>, action: &'a Action<K>) -> PlanNode<'a, K> where K: Clone + Ord {
+    fn child(parent_state: State<K>, action: &'a Action<K>) -> PlanNode<'a, K>
+    where
+        K: Clone + Ord,
+    {
         let mut child = PlanNode {
             current_state: parent_state.clone(),
             action: Some(action),
@@ -139,11 +149,17 @@ impl<'a, K> PlanNode<'a, K> {
     }
 
     /// Returns all possible nodes from this current state, along with the cost to get there.
-    fn possible_next_nodes(&self, actions: &'a [Action<K>]) -> Vec<(PlanNode<'a, K>, usize)> where K: Clone + Ord {
+    fn possible_next_nodes(&self, actions: &'a [Action<K>]) -> Vec<(PlanNode<'a, K>, usize)>
+    where
+        K: Clone + Ord,
+    {
         let mut nodes: Vec<(PlanNode<'a, K>, usize)> = vec![];
         for action in actions {
             if self.matches(&action.pre_conditions) {
-                nodes.push((PlanNode::child(self.current_state.clone(), action), action.cost));
+                nodes.push((
+                    PlanNode::child(self.current_state.clone(), action),
+                    action.cost,
+                ));
             }
         }
 
@@ -151,7 +167,10 @@ impl<'a, K> PlanNode<'a, K> {
     }
 
     /// Count the number of states in this node that aren't matching the given target.
-    fn mismatch_count(&self, target: &State<K>) -> usize where K: Ord {
+    fn mismatch_count(&self, target: &State<K>) -> usize
+    where
+        K: Ord,
+    {
         let mut count: usize = 0;
         for (name, target_value) in target {
             if let Some(current_value) = self.current_state.get(name) {
@@ -167,25 +186,39 @@ impl<'a, K> PlanNode<'a, K> {
     }
 
     /// Returns `true` if the current node is a full match for the given target.
-    fn matches(&self, target: &State<K>) -> bool where K: Ord {
+    fn matches(&self, target: &State<K>) -> bool
+    where
+        K: Ord,
+    {
         self.mismatch_count(target) == 0
     }
 }
 
 /// Formulates a plan to get from an initial state to a goal state using a set of allowed actions.
-pub fn plan<'a, K>(initial_state: &'a State<K>,
-                goal_state: &State<K>,
-                allowed_actions: &'a [Action<K>])
-                -> Option<Vec<&'a Action<K>>> where K: Clone + Eq + Ord + Hash{
+pub fn plan<'a, K>(
+    initial_state: &'a State<K>,
+    goal_state: &State<K>,
+    allowed_actions: &'a [Action<K>],
+) -> Option<Vec<&'a Action<K>>>
+where
+    K: Clone + Eq + Ord + Hash,
+{
     // Builds our initial plan node.
     let start = PlanNode::initial(initial_state);
 
     // Runs our search over the states graph.
-    if let Some((plan, _)) = astar(&start,
-                                   |ref node| node.possible_next_nodes(allowed_actions),
-                                   |ref node| node.mismatch_count(goal_state),
-                                   |ref node| node.matches(goal_state)) {
-        Some(plan.into_iter().skip(1).map(|ref node| node.action.unwrap()).collect())
+    if let Some((plan, _)) = astar(
+        &start,
+        |ref node| node.possible_next_nodes(allowed_actions),
+        |ref node| node.mismatch_count(goal_state),
+        |ref node| node.matches(goal_state),
+    ) {
+        Some(
+            plan.into_iter()
+                .skip(1)
+                .map(|ref node| node.action.unwrap())
+                .collect(),
+        )
     } else {
         None
     }
@@ -198,8 +231,12 @@ mod tests {
     #[test]
     fn test_edge_cases() {
         let mut action = Action::new("action".to_string(), 1);
-        action.pre_conditions.insert("has_something".to_string(), true);
-        action.post_conditions.insert("is_winning".to_string(), true);
+        action
+            .pre_conditions
+            .insert("has_something".to_string(), true);
+        action
+            .post_conditions
+            .insert("is_winning".to_string(), true);
 
         let actions = [action];
 
@@ -236,15 +273,14 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 #[cfg(feature = "use_serde")]
 mod tests_with_serde {
     extern crate serde_json;
 
     use super::*;
-    use std::path::Path;
     use std::fs;
+    use std::path::Path;
 
     /// A test case
     #[derive(Deserialize)]
@@ -272,19 +308,22 @@ mod tests_with_serde {
             let plan = plan(&self.initial_state, &self.goal_state, &self.actions);
 
             if let Some(actions_list) = plan {
-                let actions_names: Vec<String> =
-                    actions_list.iter().map(|&action| action.name.clone()).collect();
+                let actions_names: Vec<String> = actions_list
+                    .iter()
+                    .map(|&action| action.name.clone())
+                    .collect();
                 if self.expected_actions != actions_names {
-                    panic!("{} failed: expected {:?}, got {:?}",
-                           self.case_name,
-                           self.expected_actions,
-                           actions_names);
+                    panic!(
+                        "{} failed: expected {:?}, got {:?}",
+                        self.case_name, self.expected_actions, actions_names
+                    );
                 }
             } else {
                 if self.expected_actions.len() > 0 {
-                    panic!("{} failed: expected {:?}, got no plan",
-                           self.case_name,
-                           self.expected_actions);
+                    panic!(
+                        "{} failed: expected {:?}, got no plan",
+                        self.case_name, self.expected_actions
+                    );
                 }
             }
         }
